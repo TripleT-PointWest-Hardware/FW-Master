@@ -55,14 +55,14 @@
 #include "i2c3.h"
 #include "tmr1.h"
 #include "ext_int.h"
-#include "watchdog.h"
 #include "delay.h"
-#include "coretimer.h"
+#include "watchdog.h"
 #include "memory/flash.h"
-#include "uart2.h"
+#include "coretimer.h"
 #include "uart3.h"
 #include "interrupt_manager.h"
 #include "exceptions.h"
+#include "uart2.h"
 #ifndef _XTAL_FREQ
 #define _XTAL_FREQ  8000000UL
 #endif

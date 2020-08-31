@@ -552,7 +552,6 @@ static void CheckPortData (void)
                         /* Calculate room number */
                         u8_Room = (NUM_IF_ROOMS * e_Row) + (u8_Port * 8u) + u8_Bit + 1u;
                         printf("Room %d unlocked\r\n", u8_Room);
-                        DELAY_milliseconds(5u);
 
                         /* Send unlock command to the Gateway to pass on to the room */
                         rs485_SendCommand(u8_Room, RS485_UNLOCK_CMD);
@@ -564,7 +563,6 @@ static void CheckPortData (void)
                         /* Calculate room number */
                         u8_Room = (NUM_IF_ROOMS * e_Row) + (u8_Port * 8u) + u8_Bit + 1u;
                         printf("Room %d locked\r\n", u8_Room);
-                        DELAY_milliseconds(5u);
 
                         /* Send lock command to the Gateway to pass on to the room */
                         rs485_SendCommand(u8_Room, RS485_LOCK_CMD);                            

@@ -93,7 +93,7 @@ void rs485_ReceiveFrame (void)
     printf("\r\nRS485 RX: ");
     
     /* Give buffer time to fill */
-    DELAY_milliseconds(40u);
+    DELAY_milliseconds(20u);
      
     while (UART2_IsRxReady() && (u8_RxLen < u8_FrameSize))
     {
