@@ -93,7 +93,7 @@ void rs485_ReceiveFrame (void)
     printf("\r\nRS485 RX: ");
     
     /* Give buffer time to fill */
-    DELAY_milliseconds(20u);
+    DELAY_milliseconds(40u);
      
     while (UART2_IsRxReady() && (u8_RxLen < u8_FrameSize))
     {
@@ -134,13 +134,7 @@ void rs485_ReceiveFrame (void)
     {
         printf("\r\nFrame Detected: \r\n");
         ProcessRxFrame(&st_Frame.Frame);
-    }
-/*    else
-    {
-        printf("\r\nNo frame found.\r\n");
-        printf("\tu8_RxLen: %u\r\n", u8_RxLen);
-        printf("\tChecksum. Calc: %2.2X  Actual: %2.2X\r\n", u8_Checksum, st_Frame.Bytes[u8_RxLen -1u]);
-    } */   
+    } 
 }
 
 /************************************************************************************/

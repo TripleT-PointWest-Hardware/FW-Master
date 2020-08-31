@@ -291,7 +291,7 @@ static void InitTopRow (void)
         }
     }
     
-    //printf("[%d] [%d] [%d] [%d] -",u8_TopRowPresent[0], u8_TopRowPresent[1], u8_TopRowPresent[2], u8_TopRowPresent[3]);    
+    printf("[%d] [%d] [%d] [%d] -",u8_TopRowPresent[0], u8_TopRowPresent[1], u8_TopRowPresent[2], u8_TopRowPresent[3]);    
 }  
 
 /************************************************************************************/
@@ -364,7 +364,7 @@ static void InitBottomRow (void)
         }
     }
     
-    //printf(" [%d] [%d] [%d] [%d]\r\n",u8_BottomRowPresent[0], u8_BottomRowPresent[1], u8_BottomRowPresent[2], u8_BottomRowPresent[3]);   
+    printf(" [%d] [%d] [%d] [%d]\r\n",u8_BottomRowPresent[0], u8_BottomRowPresent[1], u8_BottomRowPresent[2], u8_BottomRowPresent[3]);   
 }  
 
 /************************************************************************************/
@@ -394,6 +394,41 @@ static void ReadBottomRow (void)
         }
     }
 }   
+
+/************************************************************************************/
+/* Check the I2C comms - if no response, reset I2C routines                         */
+/************************************************************************************/
+static void CheckI2cComms (void)
+{
+    BOOL    b_CommsOK = FALSE;
+    UINT8   u8_Cntr;
+        
+    /* See if we have had a response from any of our port expanders */
+    for (u8_Cntr=0; u8_Cntr < NUM_IF_PORTS; u8_Cntr++)
+    {
+       if (u8_BottomRowPresent[u8_Cntr] || u8_TopRowPresent[u8_Cntr])
+       {
+           b_CommsOK = TRUE;
+           break;
+       }
+    }
+    
+    if (b_CommsOK == FALSE)
+    {
+        /* Reset I2C interface */
+        printf("No response seen on I2C - resetting interfaces\r\n");
+        I2C1CON = 0x0000;
+        I2C2CON = 0x0000;
+        I2C3CON = 0x0000;
+        
+        DELAY_milliseconds(100u);
+
+        I2C1_Initialize();
+        I2C2_Initialize();
+        I2C3_Initialize();        
+    }
+    
+}
 
 /************************************************************************************/
 /* Init the LED control port expanders to be output pins - all off                  */
@@ -562,14 +597,14 @@ static void WeigandTx (UINT8* u8_Data, UINT8 u8_NumBits)
         {
             /* Send a '1' */
             DATA_1_SetLow();
-            DELAY_microseconds(100);
+            DELAY_microseconds(90);
             DATA_1_SetHigh();                        
         }
         else
         {
             /* Send a '0' */
             DATA_0_SetLow();
-            DELAY_microseconds(100);
+            DELAY_microseconds(90);
             DATA_0_SetHigh();
         }
         
@@ -584,7 +619,7 @@ static void WeigandTx (UINT8* u8_Data, UINT8 u8_NumBits)
         }
     }
     
-    DELAY_milliseconds(100u);
+    DELAY_milliseconds(50u);
 }
 
 /************************************************************************************/
@@ -689,24 +724,30 @@ void main_SendUnlockRequest (UINT8 u8_Room, UINT8* au8_CardNumber, UINT8 u8_Leng
     {
         /* Try stored option first */
         SendKeyOption(ast_RoomStatus[u8_RoomOffset].e_Parity, u8_RoomBuff, u8_Buffer);
-        DELAY_milliseconds(250u);
 
-        /* Check for any changes in the port data */
-        CheckPortData();
-        
-        /* Check if the room unlocked */
+        for (u8_Cntr=0; u8_Cntr < 30u; u8_Cntr++)
+        {
+            DELAY_milliseconds(10u);
+
+            /* Check for any changes in the port data */
+            CheckPortData();
+
+            /* Check if the room unlocked */
             if (ast_RoomStatus[u8_RoomOffset].b_Unlocked)
             {
-                printf("Sweet!\r\n");
+                break;
             }
+        }
     }
-    else
+    
+    /* If the room did not unlock, try all combinations */
+    if (ast_RoomStatus[u8_RoomOffset].b_Unlocked == FALSE)
     {
         /* Send all four parity options for card number */
         for (e_Parity=0; e_Parity < OPTION_MAX; e_Parity++)
         {
             SendKeyOption(e_Parity, u8_RoomBuff, u8_Buffer);
-            DELAY_milliseconds(3000u);
+            DELAY_milliseconds(250u);
 
             /* Check for any changes in the port data */
             CheckPortData();
@@ -734,7 +775,7 @@ int main(void)
     // initialize the device
     SYSTEM_Initialize();
         
-    printf("\r\n\r\nMaster - Version 1.3\r\n");
+    printf("\r\n\r\nMaster - Version 1.4\r\n");
 
     rs485_Init();
     InitLeds();
@@ -757,7 +798,10 @@ int main(void)
             InitTopRow();
             InitBottomRow();
             
-            //main_SendUnlockRequest(3u, "0301600039", 10u);
+            /* Check I2C Comms */
+            CheckI2cComms();            
+                    
+            WATCHDOG_TimerClear();
         }
         DELAY_milliseconds(10);
 
@@ -769,8 +813,6 @@ int main(void)
         {
             rs485_ReceiveFrame();
         }
-        
-        WATCHDOG_TimerClear();
     }
     return 1; 
 }

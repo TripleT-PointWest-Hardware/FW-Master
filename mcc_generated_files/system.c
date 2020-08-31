@@ -45,18 +45,18 @@
 #include "pin_manager.h"
 #include "clock.h"
 #include "system.h"
-#include "ext_int.h"
-#include "memory/flash.h"
-#include "i2c3.h"
-#include "i2c2.h"
 #include "i2c1.h"
+#include "i2c2.h"
+#include "i2c3.h"
+#include "tmr1.h"
+#include "ext_int.h"
 #include "delay.h"
-#include "interrupt_manager.h"
-#include "exceptions.h"
+#include "coretimer.h"
+#include "memory/flash.h"
 #include "uart2.h"
 #include "uart3.h"
-#include "tmr1.h"
-#include "coretimer.h"
+#include "interrupt_manager.h"
+#include "exceptions.h"
 
 void SYSTEM_Initialize(void)
 {
@@ -69,8 +69,8 @@ void SYSTEM_Initialize(void)
     UART3_Initialize();
     I2C3_Initialize();
     I2C2_Initialize();
-    EXT_INT_Initialize();
     TMR1_Initialize();
+    EXT_INT_Initialize();
     INTERRUPT_GlobalEnable();
 }
 

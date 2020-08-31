@@ -50,21 +50,21 @@
 #include "pin_manager.h"
 #include <stdint.h>
 #include <stdbool.h>
-#include "ext_int.h"
-#include "memory/flash.h"
-#include "i2c3.h"
-#include "i2c2.h"
 #include "i2c1.h"
-#include "delay.h"
-#include "interrupt_manager.h"
-#include "exceptions.h"
+#include "i2c2.h"
+#include "i2c3.h"
+#include "tmr1.h"
+#include "ext_int.h"
 #include "watchdog.h"
+#include "delay.h"
+#include "coretimer.h"
+#include "memory/flash.h"
 #include "uart2.h"
 #include "uart3.h"
-#include "tmr1.h"
-#include "coretimer.h"
+#include "interrupt_manager.h"
+#include "exceptions.h"
 #ifndef _XTAL_FREQ
-#define _XTAL_FREQ  4000000UL
+#define _XTAL_FREQ  8000000UL
 #endif
 #define WDT_CLR_KEY 0x5743
 
