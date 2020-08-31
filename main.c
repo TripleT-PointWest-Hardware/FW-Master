@@ -62,6 +62,7 @@
 
 #define NUM_IF_PORTS                (4u)                // Number of interface ports on a row
 #define NUM_IF_ROOMS                (NUM_IF_PORTS * 8u) // Number of rooms on a row of ports
+#define NUM_ROOMS                   (64u)               // Total Number of rooms 
 #define I2C_IF_START_ADDR           0x20u               // I2C Address of first Interface board
 #define I2C_LED_CTRL_ADDR           0x27u               // I2C Address of LED control port expander (8 bit))
 #define I2C_IODIR_REG               0x00u               // I/O Direction register 
@@ -81,6 +82,8 @@ static BOOL     u8_TopRowPresent[NUM_IF_PORTS]          = {FALSE};
 static BOOL     u8_BottomRowPresent[NUM_IF_PORTS]       = {FALSE};
 static UINT8    u8_PortData[NUM_ROWS][NUM_IF_PORTS]     = {0};
 static UINT8    u8_PortDataPrev[NUM_ROWS][NUM_IF_PORTS] = {0};
+
+static ST_ROOM_STATUS ast_RoomStatus[NUM_ROOMS]         = {0};
 
 /******************************  Local function prototypes ************************/
 static BOOL     SendI2c1Cmd     (UINT8 u8_Addr, UINT8* au8_TxBuff, UINT8 u8_NumBytes);
@@ -483,6 +486,13 @@ static void CheckPortData (void)
     UINT8   u8_Room;
     UINT8   u8_Mask;
     
+    /* Look for an IO event from the top row of interfaces */
+    ReadTopRow();
+
+    /* Look for an IO event from the bottom row of interfaces */
+    ReadBottomRow();
+
+
     /* Loop for each row of ports */
     for (e_Row = 0; e_Row < NUM_ROWS; e_Row++)
     {
@@ -511,6 +521,8 @@ static void CheckPortData (void)
 
                         /* Send unlock command to the Gateway to pass on to the room */
                         rs485_SendCommand(u8_Room, RS485_UNLOCK_CMD);
+                        
+                        ast_RoomStatus[u8_Room - 1u].b_Unlocked = TRUE; 
                     }
                     else if ((u8_New & u8_Mask) < (u8_Old & u8_Mask))
                     {
@@ -521,6 +533,8 @@ static void CheckPortData (void)
 
                         /* Send lock command to the Gateway to pass on to the room */
                         rs485_SendCommand(u8_Room, RS485_LOCK_CMD);                            
+
+                        ast_RoomStatus[u8_Room - 1u].b_Unlocked = FALSE; 
                     }
                     else
                     {
@@ -570,7 +584,7 @@ static void WeigandTx (UINT8* u8_Data, UINT8 u8_NumBits)
         }
     }
     
-    DELAY_milliseconds(25u);
+    DELAY_milliseconds(100u);
 }
 
 /************************************************************************************/
@@ -646,6 +660,7 @@ void main_SendUnlockRequest (UINT8 u8_Room, UINT8* au8_CardNumber, UINT8 u8_Leng
     UINT8       u8_RoomBuff[4];
     UINT8       u8_Buffer[20];
     UINT8       u8_Cntr;
+    UINT8       u8_RoomOffset = u8_Room - 1u;
     E_PARITY    e_Parity;
     
     printf("Sending Wiegand unlock for room %u using card %.*s\r\n", 
@@ -669,11 +684,42 @@ void main_SendUnlockRequest (UINT8 u8_Room, UINT8* au8_CardNumber, UINT8 u8_Leng
         u8_Buffer[u8_Cntr] |= (UINT8)(u8_Buffer[u8_Cntr + 1] >> 4u);
     }
 
-    /* Send all four parity options for card number */
-    for (e_Parity=0; e_Parity < OPTION_MAX; e_Parity++)
+    /* Check if we have a stored parity option */
+    if (ast_RoomStatus[u8_RoomOffset].e_Parity != OPTION_MAX)
     {
-        SendKeyOption(e_Parity, u8_RoomBuff, u8_Buffer);
-        DELAY_milliseconds(1000u);
+        /* Try stored option first */
+        SendKeyOption(ast_RoomStatus[u8_RoomOffset].e_Parity, u8_RoomBuff, u8_Buffer);
+        DELAY_milliseconds(250u);
+
+        /* Check for any changes in the port data */
+        CheckPortData();
+        
+        /* Check if the room unlocked */
+            if (ast_RoomStatus[u8_RoomOffset].b_Unlocked)
+            {
+                printf("Sweet!\r\n");
+            }
+    }
+    else
+    {
+        /* Send all four parity options for card number */
+        for (e_Parity=0; e_Parity < OPTION_MAX; e_Parity++)
+        {
+            SendKeyOption(e_Parity, u8_RoomBuff, u8_Buffer);
+            DELAY_milliseconds(3000u);
+
+            /* Check for any changes in the port data */
+            CheckPortData();
+            
+            /* Check if the room unlocked */
+            if (ast_RoomStatus[u8_RoomOffset].b_Unlocked)
+            {
+                /* Store the parity option that worked */
+                ast_RoomStatus[u8_RoomOffset].e_Parity = e_Parity;
+                printf("Storing parity option %u for room %u\r\n", e_Parity, u8_Room);
+                break;
+            }
+        }
     }
 }
 
@@ -688,13 +734,20 @@ int main(void)
     // initialize the device
     SYSTEM_Initialize();
         
-    printf("\r\n\r\nMaster - Version 1.2\r\n");
+    printf("\r\n\r\nMaster - Version 1.3\r\n");
 
     rs485_Init();
     InitLeds();
     InitTopRow();
     InitBottomRow();
 
+    /* Init room status array */
+    for (u8_UpdateCntr=0; u8_UpdateCntr < NUM_ROOMS; u8_UpdateCntr++)
+    {
+        ast_RoomStatus[u8_UpdateCntr].b_Unlocked = FALSE;
+        ast_RoomStatus[u8_UpdateCntr].e_Parity   = OPTION_MAX;
+    }
+    
     while (1)
     {
         u8_InitCounter++; 
@@ -708,12 +761,6 @@ int main(void)
         }
         DELAY_milliseconds(10);
 
-        /* Look for an IO event from the top row of interfaces */
-        ReadTopRow();
-
-        /* Look for an IO event from the bottom row of interfaces */
-        ReadBottomRow();
-        
         /* Check for any changes in the port data */
         CheckPortData();
         

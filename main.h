@@ -40,6 +40,12 @@ typedef enum
     OPTION_MAX
 } E_PARITY;
 
+typedef struct
+{
+    BOOL        b_Unlocked;
+    E_PARITY    e_Parity;
+} ST_ROOM_STATUS;
+
 #define LED_ON                              (TRUE)
 #define LED_OFF                             (FALSE)
 #define BottomRowCallBack           EX_INT0_CallBack            
