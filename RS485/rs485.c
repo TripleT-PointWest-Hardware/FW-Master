@@ -46,17 +46,25 @@ static void TransmitBuffer (UINT8* au8_Buffer, UINT8 u8_Length)
 {
 
     SET_DIR_TX();
-    DELAY_milliseconds(10);
+    DELAY_milliseconds(1);
             
     UART2_WriteBuffer(au8_Buffer, u8_Length);
 
     /* Wait for Tx to complete before switching direction to Rx again */
     while (!UART2_IsTxDone())
     {
-        DELAY_milliseconds(10);    
+        DELAY_milliseconds(1);    
     }
     
-    SET_DIR_RX();    
+    SET_DIR_RX();
+
+    /* Switching between Tx and Rx generates a null character in Rx queue */
+    DELAY_milliseconds(1);
+    if (UART2_Peek(0) == 0x00)
+    {
+        /* Throw away the extra char */
+        UART2_Read();
+    }
 }
 
 /************************************************************************************/
@@ -127,12 +135,12 @@ void rs485_ReceiveFrame (void)
         printf("\r\nFrame Detected: \r\n");
         ProcessRxFrame(&st_Frame.Frame);
     }
-    else
+/*    else
     {
         printf("\r\nNo frame found.\r\n");
         printf("\tu8_RxLen: %u\r\n", u8_RxLen);
         printf("\tChecksum. Calc: %2.2X  Actual: %2.2X\r\n", u8_Checksum, st_Frame.Bytes[u8_RxLen -1u]);
-    }    
+    } */   
 }
 
 /************************************************************************************/

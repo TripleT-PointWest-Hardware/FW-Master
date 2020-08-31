@@ -495,33 +495,38 @@ static void CheckPortData (void)
             /* Compare old values with new to detect changes */
             if (u8_Old != u8_New)
             {
-                /* Set LED state */
-                if (u8_New)
-                {
-                    /* At least one output is active, so turn on orange LED */
-                    SetLedState((u8_Port * 2) +1, LED_ON, e_Row);
+                /* Set orange LED state */
+                SetLedState((u8_Port * 2) +1, (u8_New ? LED_ON : LED_OFF), e_Row);
                     
-                    /* Look for any new rooms that have been unlocked */
-                    for (u8_Bit = 0; u8_Bit < 8u; u8_Bit++)
+                /* Look for any new rooms that have been unlocked */
+                for (u8_Bit = 0; u8_Bit < 8u; u8_Bit++)
+                {
+                    u8_Mask = 1 << u8_Bit;
+                    if ((u8_New & u8_Mask) > (u8_Old & u8_Mask))
                     {
-                        u8_Mask = 1 << u8_Bit;
-                        if ((u8_New & u8_Mask) > (u8_Old & u8_Mask))
-                        {
-                            /* Calculate room number */
-                            u8_Room = (NUM_IF_ROOMS * e_Row) + (u8_Port * 8u) + u8_Bit + 1u;
-                            printf("Room %d unlocked\r\n", u8_Room);
-                            DELAY_milliseconds(5u);
-                            
-                            /* Send unlock command to the Gateway to pass on to the room */
-                            rs485_SendCommand(u8_Room, RS485_UNLOCK_CMD);
-                        }
+                        /* Calculate room number */
+                        u8_Room = (NUM_IF_ROOMS * e_Row) + (u8_Port * 8u) + u8_Bit + 1u;
+                        printf("Room %d unlocked\r\n", u8_Room);
+                        DELAY_milliseconds(5u);
+
+                        /* Send unlock command to the Gateway to pass on to the room */
+                        rs485_SendCommand(u8_Room, RS485_UNLOCK_CMD);
+                    }
+                    else if ((u8_New & u8_Mask) < (u8_Old & u8_Mask))
+                    {
+                        /* Calculate room number */
+                        u8_Room = (NUM_IF_ROOMS * e_Row) + (u8_Port * 8u) + u8_Bit + 1u;
+                        printf("Room %d locked\r\n", u8_Room);
+                        DELAY_milliseconds(5u);
+
+                        /* Send lock command to the Gateway to pass on to the room */
+                        rs485_SendCommand(u8_Room, RS485_LOCK_CMD);                            
+                    }
+                    else
+                    {
+                        /* Do nothing - no change */
                     }
                 }
-                else
-                {
-                    /* All outputs off - turn off orange LED and no action to take */
-                    SetLedState((u8_Port * 2) +1, LED_OFF, e_Row);
-                }                
                 
                 /* Update our old values */
                 u8_PortDataPrev[e_Row][u8_Port] = u8_PortData[e_Row][u8_Port];
@@ -677,12 +682,13 @@ void main_SendUnlockRequest (UINT8 u8_Room, UINT8* au8_CardNumber, UINT8 u8_Leng
 /************************************************************************************/
 int main(void)
 {   
-    UINT8   u8_InitCounter = 0;
+    UINT8   u8_InitCounter  = 0;
+    UINT8   u8_UpdateCntr   = 0;
     
     // initialize the device
     SYSTEM_Initialize();
         
-    printf("\r\n\r\nMaster - Version 1.1\r\n");
+    printf("\r\n\r\nMaster - Version 1.2\r\n");
 
     rs485_Init();
     InitLeds();
@@ -691,7 +697,7 @@ int main(void)
 
     while (1)
     {
-        u8_InitCounter++;
+        u8_InitCounter++; 
         if (u8_InitCounter == 0)
         {
             /* Every 2.5 seconds, look for new interface cards */

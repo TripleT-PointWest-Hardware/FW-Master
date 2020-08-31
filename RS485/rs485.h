@@ -11,6 +11,9 @@
 /* Defined commands */
 #define RS485_UNLOCK_REQ                        'R'     /* Command to request an unlock. Followed by card ID        */
 #define RS485_UNLOCK_CMD                        'U'     /* Command to perform an unlock operation on the lock       */
+#define RS485_LOCK_CMD                          'L'     /* Command to perform an unlock operation on the lock       */
+#define RS485_ACK_CMD                           'A'     /* Command to indicate message acknowledge                  */
+#define RS485_NACK_CMD                          'N'     /* Command to indicate message failed                       */
 
 #define RS485_START_OF_FRAME                    (0x7Eu) /* Start of Frame delimiter for frames                      */
 #define RS485_DEST_MASTER                       'M'     /* Indicate source or destination for Master                */
