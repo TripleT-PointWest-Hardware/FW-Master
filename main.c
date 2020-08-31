@@ -96,7 +96,6 @@ static void     InitBottomRow   (void);
 static void     ReadTopRow      (void);
 static void     ReadBottomRow   (void);
 static void     CheckPortData   (void);
-static void     SendKeyOption   (E_PARITY e_Parity, UINT8* u8_RoomBuff, UINT8* u8_Buffer);
 static void     WeigandTx       (UINT8* u8_Data, UINT8 u8_NumBits);
 
 /************************************************************************************/
@@ -621,68 +620,78 @@ static void WeigandTx (UINT8* u8_Data, UINT8 u8_NumBits)
 }
 
 /************************************************************************************/
-/* Convert a string of ASCII numbers into a 16 bit values and store in the buffer   */
+/* Converts a 4 bit ASCII coded Hex value to a 4 bit value                          */
 /************************************************************************************/
-static void Get16BitValue (UINT8* u8_Dest, UINT8* u8_Src, UINT8 u8_Length)
+static UINT8 AsciiToBin(UINT8 u8_AsciiData)
 {
-    UINT8   u8_Cntr;
-    UINT16  u16_Total = 0u;
+    UINT8 u8_RetVal = 0u;
     
-    for (u8_Cntr=0; u8_Cntr < u8_Length; u8_Cntr++)
+    if ((u8_AsciiData >= '0') && (u8_AsciiData <= '9'))
     {
-        u16_Total *= 10;
-        u16_Total += u8_Src[u8_Cntr] - '0';
+        u8_RetVal = u8_AsciiData - '0';
+    }
+    else if ((u8_AsciiData >= 'a') && (u8_AsciiData <= 'f'))
+    {
+        u8_RetVal = 10u + (u8_AsciiData - 'a');
+    } 
+    else if ((u8_AsciiData >= 'A') && (u8_AsciiData <= 'F'))
+    {
+        u8_RetVal = 10u + (u8_AsciiData - 'A');
+    }
+    else
+    {
+        /* Not a value character */
     }
     
-    u8_Dest[0] = (UINT8)(u16_Total >> 8);
-    u8_Dest[1] = (UINT8)(u16_Total & 0xFFu);    
+    return (u8_RetVal);
 }
 
 /************************************************************************************/
-/* Sends specified room and card number using specified parity option               */
-/* We don't know how to calculate the parity bit, so there are 4 possible options   */
-/* we can try. 2 parity bits = 4 possible combinations.                             */
+/* Sends the required number of ASCII coded Hex bits using Wiegand Protocol         */
 /************************************************************************************/
-static void SendKeyOption(E_PARITY e_Parity, UINT8* u8_RoomBuff, UINT8* u8_Buffer)
+static void WeigandHexTx (UINT8* u8_Data, UINT8 u8_NumBits, UINT8 u8_StartOffset)
 {
-    printf("Option [%d]\r\n", e_Parity);
-
-    switch (e_Parity)
-    {
-        case OPTION_1 : /* both bits = 0        */
-            u8_Buffer[0] &= ~(1 << 7);
-            u8_Buffer[4] &= ~(1 << 3);
-            break;
-            
-        case OPTION_2 : /* Bit 0 = 0, Bit 36 = 1 */
-            u8_Buffer[0] &= ~(1 << 7);
-            u8_Buffer[4] |= 1 << 3;
-            break;
-
-        case OPTION_3 : /* Bit 0 = 1, Bit 36 = 0 */
-            u8_Buffer[0] |= 1 << 7;
-            u8_Buffer[4] &= ~(1 << 3);
-            break;
-
-        case OPTION_4 : /* Both bits = 1        */
-            u8_Buffer[0] |= 1 << 7;
-            u8_Buffer[4] |= 1 << 3;
-            break;
-
-        default:
-            printf("Parity Option not supported\r\n");
-            break;
-    }
-
-    WeigandTx(u8_Buffer, 37u);
+    UINT8 u8_Mask = 1u << 3u;
+    UINT8 u8_TxChar;
     
-    DELAY_milliseconds(300u);
+    u8_TxChar = AsciiToBin(*u8_Data);
+    
+    while (u8_NumBits--)
+    {
+        if (u8_StartOffset)
+        {
+            u8_StartOffset--;
+        }
+        else
+        {
+            if (u8_TxChar & u8_Mask)
+            {
+                /* Send a '1' */
+                DATA_1_SetLow();
+                DELAY_microseconds(90);
+                DATA_1_SetHigh();                        
+            }
+            else
+            {
+                /* Send a '0' */
+                DATA_0_SetLow();
+                DELAY_microseconds(90);
+                DATA_0_SetHigh();
+            }
 
-    /* Now send the room number and Hash key */
-    WeigandTx(&u8_RoomBuff[0], 4u);
-    WeigandTx(&u8_RoomBuff[1], 4u);
-    WeigandTx(&u8_RoomBuff[2], 4u);
-    WeigandTx(&u8_RoomBuff[3], 4u);            
+            DELAY_milliseconds(1);
+        }
+        
+        u8_Mask >>= 1u;
+        
+        /* Completed 4 bits - move on to next 4 bits */
+        if (u8_Mask == 0)
+        {
+            u8_Mask = 1u << 3u;
+            u8_Data++;
+            u8_TxChar = AsciiToBin(*u8_Data);
+        }
+    }    
 }
 
 /************************************************************************************/
@@ -693,6 +702,7 @@ void main_SendUnlockRequest (UINT8 u8_Room, UINT8* au8_CardNumber, UINT8 u8_Leng
     UINT8       u8_RoomBuff[4];
     UINT8       u8_Buffer[20];
     UINT8       u8_Cntr;
+    UINT8       u8_NumBits;
     UINT8       u8_RoomOffset = u8_Room - 1u;
     E_PARITY    e_Parity;
     
@@ -704,62 +714,21 @@ void main_SendUnlockRequest (UINT8 u8_Room, UINT8* au8_CardNumber, UINT8 u8_Leng
     u8_RoomBuff[1] = (u8_Room / 10u) << 4u;
     u8_RoomBuff[2] = (u8_Room % 10u) << 4u;
     u8_RoomBuff[3] = KEYPAD_HASH;
-   
-    /* Prepare card number */
-    u8_Buffer[0] = 40u;
-    Get16BitValue(&u8_Buffer[1], &au8_CardNumber[0], 5u);
-    Get16BitValue(&u8_Buffer[3], &au8_CardNumber[5], 5u);
+
+    /* Get number of bits "37,xxx" */
+    u8_NumBits  = (au8_CardNumber[0] - '0') * 10;
+    u8_NumBits += au8_CardNumber[1] - '0';
+
+    /* Send ASCII coded Hex as Wiegand */
+    WeigandHexTx(&au8_CardNumber[3], 40u, 40u - u8_NumBits);
     
-    /* Shift card number up 4 bits as the facility number is only 12 bits */
-    for (u8_Cntr = 1; u8_Cntr < 5u; u8_Cntr++)
-    {
-        u8_Buffer[u8_Cntr] <<= 4u;
-        u8_Buffer[u8_Cntr] |= (UINT8)(u8_Buffer[u8_Cntr + 1] >> 4u);
-    }
+    DELAY_milliseconds(300u);
 
-    /* Check if we have a stored parity option */
-    if (ast_RoomStatus[u8_RoomOffset].e_Parity != OPTION_MAX)
-    {
-        /* Try stored option first */
-        SendKeyOption(ast_RoomStatus[u8_RoomOffset].e_Parity, u8_RoomBuff, u8_Buffer);
-
-        for (u8_Cntr=0; u8_Cntr < 30u; u8_Cntr++)
-        {
-            DELAY_milliseconds(10u);
-
-            /* Check for any changes in the port data */
-            CheckPortData();
-
-            /* Check if the room unlocked */
-            if (ast_RoomStatus[u8_RoomOffset].b_Unlocked)
-            {
-                break;
-            }
-        }
-    }
-    
-    /* If the room did not unlock, try all combinations */
-    if (ast_RoomStatus[u8_RoomOffset].b_Unlocked == FALSE)
-    {
-        /* Send all four parity options for card number */
-        for (e_Parity=0; e_Parity < OPTION_MAX; e_Parity++)
-        {
-            SendKeyOption(e_Parity, u8_RoomBuff, u8_Buffer);
-            DELAY_milliseconds(250u);
-
-            /* Check for any changes in the port data */
-            CheckPortData();
-            
-            /* Check if the room unlocked */
-            if (ast_RoomStatus[u8_RoomOffset].b_Unlocked)
-            {
-                /* Store the parity option that worked */
-                ast_RoomStatus[u8_RoomOffset].e_Parity = e_Parity;
-                printf("Storing parity option %u for room %u\r\n", e_Parity, u8_Room);
-                break;
-            }
-        }
-    }
+    /* Now send the room number and Hash key */
+    WeigandTx(&u8_RoomBuff[0], 4u);
+    WeigandTx(&u8_RoomBuff[1], 4u);
+    WeigandTx(&u8_RoomBuff[2], 4u);
+    WeigandTx(&u8_RoomBuff[3], 4u);
 }
 
 /************************************************************************************/
@@ -773,7 +742,7 @@ int main(void)
     // initialize the device
     SYSTEM_Initialize();
         
-    printf("\r\n\r\nMaster - Version 1.4\r\n");
+    printf("\r\n\r\nMaster - Version 1.5\r\n");
 
     rs485_Init();
     InitLeds();
